@@ -1,0 +1,1314 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Management
+model User {
+  id        String   @id @default(cuid())
+  username  String   @unique @db.VarChar(50)
+  email     String   @unique @db.VarChar(100)
+  name      String   @db.VarChar(100)
+  password  String   @db.VarChar(255)
+  roleId    String
+  role      UserRole @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  isActive  Boolean  @default(true)
+  lastLogin DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([roleId])
+  @@index([isActive])
+  @@index([lastLogin])
+  @@index([username])
+  @@index([email])
+
+  // Relations
+  createdCitizens    Citizen[]       @relation("CreatedBy")
+  processedRequests  LetterRequest[] @relation("ProcessedBy")
+  uploadedDocuments  Document[]      @relation("UploadedBy")
+  
+  // Additional relations
+  articles           Article[]       @relation("ArticleAuthor")
+  galleryUploads     Gallery[]       @relation("GalleryUploader")
+  createdPrograms    AidProgram[]    @relation("ProgramCreator")
+  approvedExpenses   Expense[]       @relation("ExpenseApprover")
+  createdExpenses    Expense[]       @relation("ExpenseCreator")
+  handledComplaints  Complaint[]     @relation("ComplaintHandler")
+  activityLogs       ActivityLog[]   @relation("ActivityLogger")
+  notifications      Notification[]  @relation("UserNotifications")
+  apparatus          VillageApparatus?
+
+  @@map("users")
+}
+
+model UserRole {
+  id          String       @id @default(cuid())
+  name        String       @unique @db.VarChar(50)
+  description String?      @db.Text
+  permissions Permission[]
+  users       User[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([name])
+  @@map("user_roles")
+}
+
+model Permission {
+  id       String     @id @default(cuid())
+  name     String     @db.VarChar(100)
+  resource String     @db.VarChar(50)
+  action   String     @db.VarChar(50)
+  roles    UserRole[]
+
+  @@unique([resource, action])
+  @@index([resource])
+  @@index([action])
+  @@map("permissions")
+}
+
+// Village Configuration
+model VillageConfig {
+  id          String   @id @default(cuid())
+  name        String   @db.VarChar(100)
+  code        String   @unique @db.VarChar(20)
+  headName    String   @db.VarChar(100)
+  address     String   @db.Text
+  phone       String?  @db.VarChar(20)
+  email       String?  @db.VarChar(100)
+  website     String?  @db.VarChar(255)
+  logo        String?  @db.VarChar(255)
+  description String?  @db.Text
+  
+  // Geographic information
+  latitude    Float?
+  longitude   Float?
+  area        Float?   // in hectares
+  altitude    Int?     // in meters
+  
+  // Administrative boundaries
+  districtCode String? @db.VarChar(20)
+  regencyCode  String? @db.VarChar(20)
+  provinceCode String? @db.VarChar(20)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([code])
+  @@index([districtCode])
+  @@index([regencyCode])
+  @@index([provinceCode])
+  @@map("village_config")
+}
+
+// Application Settings
+model Setting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  type        SettingType @default(STRING)
+  category    String   @default("general")
+  description String?
+  isPublic    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("settings")
+}
+
+enum SettingType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+  
+  @@map("setting_type")
+}
+
+// Notification System
+model Notification {
+  id          String           @id @default(cuid())
+  title       String
+  message     String
+  type        NotificationType @default(INFO)
+  userId      String?
+  user        User?            @relation("UserNotifications", fields: [userId], references: [id])
+  isRead      Boolean          @default(false)
+  readAt      DateTime?
+  data        Json?            // Additional data for the notification
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  INFO
+  SUCCESS
+  WARNING
+  ERROR
+  REMINDER
+  
+  @@map("notification_type")
+}
+
+// Backup and Audit System
+model BackupLog {
+  id          String      @id @default(cuid())
+  filename    String
+  size        BigInt      // File size in bytes
+  type        BackupType  @default(FULL)
+  status      BackupStatus @default(PENDING)
+  startedAt   DateTime    @default(now())
+  completedAt DateTime?
+  errorMessage String?
+  checksum    String?     // File checksum for integrity verification
+  location    String?     // Storage location (local, S3, etc.)
+  
+  @@map("backup_logs")
+}
+
+enum BackupType {
+  FULL
+  INCREMENTAL
+  DIFFERENTIAL
+  
+  @@map("backup_type")
+}
+
+enum BackupStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  
+  @@map("backup_status")
+}
+
+// Letter Template System
+model LetterTemplate {
+  id          String   @id @default(cuid())
+  name        String
+  letterType  LetterType
+  template    String   @db.Text // HTML template with placeholders
+  variables   Json     // Available variables for the template
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([letterType, name])
+  @@map("letter_templates")
+}
+
+// Generated Letters/Certificates
+model GeneratedLetter {
+  id              String        @id @default(cuid())
+  letterRequestId String        @unique
+  letterRequest   LetterRequest @relation(fields: [letterRequestId], references: [id])
+  letterNumber    String        @unique
+  content         String        @db.Text
+  pdfUrl          String?
+  signedAt        DateTime?
+  signedBy        String?
+  createdAt       DateTime      @default(now())
+
+  @@index([letterNumber])
+  @@index([signedAt])
+  @@map("generated_letters")
+}
+
+// Citizen Management
+model Citizen {
+  id           String        @id @default(cuid())
+  nik          String        @unique @db.VarChar(16) // NIK is exactly 16 digits
+  name         String        @db.VarChar(100)
+  birthDate    DateTime      @db.Date
+  birthPlace   String        @db.VarChar(100)
+  gender       Gender
+  religion     Religion
+  education    Education
+  occupation   String        @db.VarChar(100)
+  maritalStatus MaritalStatus
+  bloodType    BloodType?
+  
+  // Address
+  addressId    String?
+  address      Address?      @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  
+  // Family relation
+  familyId     String?
+  family       Family?       @relation(fields: [familyId], references: [id], onDelete: SetNull)
+  isHeadOfFamily Boolean     @default(false)
+  
+  // Location data
+  latitude     Float?
+  longitude    Float?
+  
+  // Relations
+  documents      Document[]
+  letterRequests LetterRequest[]
+  
+  // Additional relations
+  groupMemberships GroupMember[]   @relation("GroupMemberships")
+  ledGroups        Group[]         @relation("GroupLeader")
+  aidRecipients    AidRecipient[]  @relation("AidRecipients")
+  complaints       Complaint[]     @relation("ComplaintSubmitter")
+  healthData       HealthData?
+  
+  // Metadata
+  createdById  String
+  createdBy    User          @relation("CreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  @@index([familyId])
+  @@index([addressId])
+  @@index([createdById])
+  @@index([name])
+  @@index([birthDate])
+  @@index([nik])
+  @@index([gender])
+  @@index([religion])
+  @@index([maritalStatus])
+  @@index([isHeadOfFamily])
+  @@map("citizens")
+}
+
+model Family {
+  id           String    @id @default(cuid())
+  familyNumber String    @unique @db.VarChar(20)
+  socialStatus SocialStatus @default(MAMPU)
+  
+  // Address
+  addressId    String?
+  address      Address?  @relation(fields: [addressId], references: [id], onDelete: SetNull)
+  
+  // Relations
+  members      Citizen[]
+  
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([familyNumber])
+  @@index([socialStatus])
+  @@index([addressId])
+  @@map("families")
+}
+
+model Address {
+  id         String   @id @default(cuid())
+  street     String   @db.VarChar(255)
+  rt         String   @db.VarChar(5)
+  rw         String   @db.VarChar(5)
+  village    String   @db.VarChar(100)
+  district   String   @db.VarChar(100)
+  regency    String   @db.VarChar(100)
+  province   String   @db.VarChar(100)
+  postalCode String?  @db.VarChar(10)
+  
+  // Relations
+  citizens   Citizen[]
+  families   Family[]
+  
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([rt, rw])
+  @@index([village])
+  @@index([district])
+  @@index([regency])
+  @@index([province])
+  @@index([postalCode])
+  @@map("addresses")
+}
+
+// Document Management
+model Document {
+  id         String      @id @default(cuid())
+  name       String
+  type       DocumentType
+  url        String
+  size       Int
+  mimeType   String
+  
+  // Relations
+  citizenId  String?
+  citizen    Citizen?    @relation(fields: [citizenId], references: [id])
+  
+  letterRequestId String?
+  letterRequest   LetterRequest? @relation(fields: [letterRequestId], references: [id])
+  
+  uploadedById String
+  uploadedBy   User        @relation("UploadedBy", fields: [uploadedById], references: [id])
+  uploadedAt   DateTime    @default(now())
+
+  @@map("documents")
+}
+
+// Letter Request System
+model LetterRequest {
+  id          String        @id @default(cuid())
+  citizenId   String
+  citizen     Citizen       @relation(fields: [citizenId], references: [id])
+  letterType  LetterType
+  purpose     String
+  status      RequestStatus @default(PENDING)
+  notes       String?
+  
+  // Processing info
+  processedById String?
+  processedBy   User?       @relation("ProcessedBy", fields: [processedById], references: [id])
+  processedAt   DateTime?
+  
+  // Relations
+  documents      Document[]
+  generatedLetter GeneratedLetter?
+  
+  requestedAt DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@index([citizenId])
+  @@index([status])
+  @@index([letterType])
+  @@index([requestedAt])
+  @@map("letter_requests")
+}
+
+// Enums
+enum Gender {
+  L // Laki-laki
+  P // Perempuan
+
+  @@map("gender")
+}
+
+enum Religion {
+  ISLAM
+  KRISTEN
+  KATOLIK
+  HINDU
+  BUDDHA
+  KONGHUCU
+
+  @@map("religion")
+}
+
+enum Education {
+  TIDAK_SEKOLAH
+  SD
+  SMP
+  SMA
+  D1
+  D2
+  D3
+  S1
+  S2
+  S3
+
+  @@map("education")
+}
+
+enum MaritalStatus {
+  BELUM_KAWIN
+  KAWIN
+  CERAI_HIDUP
+  CERAI_MATI
+
+  @@map("marital_status")
+}
+
+enum BloodType {
+  A
+  B
+  AB
+  O
+
+  @@map("blood_type")
+}
+
+enum SocialStatus {
+  MAMPU
+  KURANG_MAMPU
+  MISKIN
+
+  @@map("social_status")
+}
+
+enum DocumentType {
+  KTP
+  KK
+  AKTA_LAHIR
+  IJAZAH
+  SERTIFIKAT
+  LAINNYA
+
+  @@map("document_type")
+}
+
+enum LetterType {
+  SURAT_KETERANGAN_DOMISILI
+  SURAT_KETERANGAN_USAHA
+  SURAT_KETERANGAN_TIDAK_MAMPU
+  SURAT_PENGANTAR
+  LAINNYA
+
+  @@map("letter_type")
+}
+
+enum RequestStatus {
+  PENDING
+  DIPROSES
+  SELESAI
+  DITOLAK
+
+  @@map("request_status")
+}
+
+// Additional OpenSID Models
+
+// Article/News Management
+model Article {
+  id          String      @id @default(cuid())
+  title       String
+  slug        String      @unique
+  content     String
+  excerpt     String?
+  featured    Boolean     @default(false)
+  published   Boolean     @default(false)
+  publishedAt DateTime?
+  categoryId  String?
+  category    Category?   @relation(fields: [categoryId], references: [id])
+  authorId    String
+  author      User        @relation("ArticleAuthor", fields: [authorId], references: [id])
+  tags        String[]
+  viewCount   Int         @default(0)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([published])
+  @@index([categoryId])
+  @@index([authorId])
+  @@index([publishedAt])
+  @@map("articles")
+}
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  slug        String    @unique
+  description String?
+  articles    Article[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("categories")
+}
+
+// Gallery Management
+model Gallery {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  imageUrl    String
+  albumId     String?
+  album       Album?   @relation(fields: [albumId], references: [id])
+  uploadedById String
+  uploadedBy  User     @relation("GalleryUploader", fields: [uploadedById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("galleries")
+}
+
+model Album {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  coverImage  String?
+  images      Gallery[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@map("albums")
+}
+
+// Group/Organization Management
+model Group {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  categoryId  String
+  category    GroupCategory @relation(fields: [categoryId], references: [id])
+  leaderId    String?
+  leader      Citizen?      @relation("GroupLeader", fields: [leaderId], references: [id])
+  members     GroupMember[]
+  isActive    Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@map("groups")
+}
+
+model GroupCategory {
+  id          String  @id @default(cuid())
+  name        String  @unique
+  description String?
+  groups      Group[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("group_categories")
+}
+
+model GroupMember {
+  id        String   @id @default(cuid())
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id])
+  citizenId String
+  citizen   Citizen  @relation("GroupMemberships", fields: [citizenId], references: [id])
+  position  String?
+  joinedAt  DateTime @default(now())
+  leftAt    DateTime?
+  isActive  Boolean  @default(true)
+
+  @@unique([groupId, citizenId])
+  @@map("group_members")
+}
+
+// Financial Management
+model Budget {
+  id          String        @id @default(cuid())
+  year        Int
+  category    String
+  subcategory String?
+  description String
+  amount      Decimal       @db.Decimal(15, 2)
+  spent       Decimal       @default(0) @db.Decimal(15, 2)
+  remaining   Decimal       @default(0) @db.Decimal(15, 2)
+  expenses    Expense[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([year, category, subcategory])
+  @@map("budgets")
+}
+
+model Expense {
+  id          String   @id @default(cuid())
+  budgetId    String
+  budget      Budget   @relation(fields: [budgetId], references: [id])
+  description String
+  amount      Decimal  @db.Decimal(15, 2)
+  date        DateTime
+  receipt     String?
+  approvedBy  String?
+  approver    User?    @relation("ExpenseApprover", fields: [approvedBy], references: [id])
+  createdById String
+  createdBy   User     @relation("ExpenseCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("expenses")
+}
+
+// Aid/Assistance Program Management
+model AidProgram {
+  id          String           @id @default(cuid())
+  name        String
+  description String?
+  startDate   DateTime
+  endDate     DateTime?
+  budget      Decimal?         @db.Decimal(15, 2)
+  criteria    String
+  status      ProgramStatus    @default(ACTIVE)
+  recipients  AidRecipient[]
+  createdById String
+  createdBy   User             @relation("ProgramCreator", fields: [createdById], references: [id])
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@map("aid_programs")
+}
+
+model AidRecipient {
+  id          String     @id @default(cuid())
+  programId   String
+  program     AidProgram @relation(fields: [programId], references: [id])
+  citizenId   String
+  citizen     Citizen    @relation("AidRecipients", fields: [citizenId], references: [id])
+  amount      Decimal?   @db.Decimal(15, 2)
+  receivedAt  DateTime?
+  status      RecipientStatus @default(ELIGIBLE)
+  notes       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@unique([programId, citizenId])
+  @@map("aid_recipients")
+}
+
+// Inventory Management
+model InventoryCategory {
+  id          String          @id @default(cuid())
+  name        String          @unique
+  description String?
+  items       InventoryItem[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("inventory_categories")
+}
+
+model InventoryItem {
+  id          String            @id @default(cuid())
+  name        String
+  description String?
+  categoryId  String
+  category    InventoryCategory @relation(fields: [categoryId], references: [id])
+  quantity    Int               @default(0)
+  unit        String
+  price       Decimal?          @db.Decimal(15, 2)
+  condition   ItemCondition     @default(GOOD)
+  location    String?
+  purchaseDate DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+
+  @@map("inventory_items")
+}
+
+// Complaint/Feedback System
+model Complaint {
+  id          String          @id @default(cuid())
+  title       String
+  description String
+  category    String
+  priority    Priority        @default(MEDIUM)
+  status      ComplaintStatus @default(OPEN)
+  submitterId String?
+  submitter   Citizen?        @relation("ComplaintSubmitter", fields: [submitterId], references: [id])
+  assignedToId String?
+  assignedTo  User?           @relation("ComplaintHandler", fields: [assignedToId], references: [id])
+  response    String?
+  respondedAt DateTime?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("complaints")
+}
+
+// Statistics and Logs
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation("ActivityLogger", fields: [userId], references: [id])
+  action      String
+  resource    String
+  resourceId  String?
+  description String?
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@map("activity_logs")
+}
+
+model Statistics {
+  id          String   @id @default(cuid())
+  type        String
+  label       String
+  value       Int
+  date        DateTime
+  metadata    Json?
+  createdAt   DateTime @default(now())
+
+  @@unique([type, label, date])
+  @@map("statistics")
+}
+
+// Additional Enums
+enum ProgramStatus {
+  ACTIVE
+  INACTIVE
+  COMPLETED
+  CANCELLED
+
+  @@map("program_status")
+}
+
+enum RecipientStatus {
+  ELIGIBLE
+  RECEIVED
+  REJECTED
+  PENDING
+
+  @@map("recipient_status")
+}
+
+enum ItemCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+
+  @@map("item_condition")
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+
+  @@map("priority")
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  REJECTED
+
+  @@map("complaint_status")
+}
+
+// Additional Models for Complete OpenSID System
+
+// Migration Tracking
+model MigrationLog {
+  id          String      @id @default(cuid())
+  tableName   String      @db.VarChar(100)
+  operation   MigrationOperation
+  recordCount Int         @default(0)
+  status      MigrationStatus @default(PENDING)
+  startedAt   DateTime    @default(now())
+  completedAt DateTime?
+  errorMessage String?    @db.Text
+  checksum    String?     @db.VarChar(255)
+  
+  @@index([tableName])
+  @@index([status])
+  @@index([startedAt])
+  @@map("migration_logs")
+}
+
+enum MigrationOperation {
+  EXPORT
+  IMPORT
+  VALIDATE
+  CLEANUP
+  
+  @@map("migration_operation")
+}
+
+enum MigrationStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  FAILED
+  ROLLBACK
+  
+  @@map("migration_status")
+}
+
+// System Configuration
+model SystemConfig {
+  id          String   @id @default(cuid())
+  module      String   @db.VarChar(50)
+  key         String   @db.VarChar(100)
+  value       String   @db.Text
+  dataType    ConfigDataType @default(STRING)
+  isRequired  Boolean  @default(false)
+  description String?  @db.Text
+  validationRule String? @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([module, key])
+  @@index([module])
+  @@map("system_configs")
+}
+
+enum ConfigDataType {
+  STRING
+  NUMBER
+  BOOLEAN
+  JSON
+  EMAIL
+  URL
+  
+  @@map("config_data_type")
+}
+
+// Village Apparatus/Staff Management
+model VillageApparatus {
+  id          String   @id @default(cuid())
+  name        String   @db.VarChar(100)
+  position    String   @db.VarChar(100)
+  nip         String?  @unique @db.VarChar(20) // Nomor Induk Pegawai
+  nik         String?  @unique @db.VarChar(16)
+  phone       String?  @db.VarChar(20)
+  email       String?  @db.VarChar(100)
+  address     String?  @db.Text
+  startDate   DateTime @db.Date
+  endDate     DateTime? @db.Date
+  isActive    Boolean  @default(true)
+  photo       String?  @db.VarChar(255)
+  
+  // Relations
+  userId      String?  @unique
+  user        User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([position])
+  @@index([isActive])
+  @@index([startDate])
+  @@map("village_apparatus")
+}
+
+// Village Regulations/Laws
+model VillageRegulation {
+  id          String   @id @default(cuid())
+  number      String   @unique @db.VarChar(50)
+  title       String   @db.VarChar(255)
+  type        RegulationType
+  content     String   @db.Text
+  status      RegulationStatus @default(DRAFT)
+  enactedDate DateTime? @db.Date
+  effectiveDate DateTime? @db.Date
+  revokedDate DateTime? @db.Date
+  
+  // File attachments
+  documentUrl String?  @db.VarChar(255)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([enactedDate])
+  @@map("village_regulations")
+}
+
+// Village Meetings
+model VillageMeeting {
+  id          String   @id @default(cuid())
+  title       String   @db.VarChar(255)
+  description String?  @db.Text
+  type        MeetingType
+  date        DateTime
+  location    String   @db.VarChar(255)
+  agenda      String   @db.Text
+  minutes     String?  @db.Text
+  attendees   Json?    // Array of attendee information
+  status      MeetingStatus @default(SCHEDULED)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([type])
+  @@index([date])
+  @@index([status])
+  @@map("village_meetings")
+}
+
+// Village Assets/Infrastructure
+model VillageAsset {
+  id          String      @id @default(cuid())
+  name        String      @db.VarChar(255)
+  description String?     @db.Text
+  category    AssetCategory
+  location    String      @db.VarChar(255)
+  condition   AssetCondition @default(GOOD)
+  value       Decimal?    @db.Decimal(15, 2)
+  purchaseDate DateTime?  @db.Date
+  lastMaintenance DateTime? @db.Date
+  nextMaintenance DateTime? @db.Date
+  
+  // Geographic data
+  latitude    Float?
+  longitude   Float?
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([category])
+  @@index([condition])
+  @@index([location])
+  @@map("village_assets")
+}
+
+// Population Statistics
+model PopulationStatistic {
+  id          String   @id @default(cuid())
+  year        Int
+  month       Int
+  totalMale   Int      @default(0)
+  totalFemale Int      @default(0)
+  totalFamilies Int    @default(0)
+  births      Int      @default(0)
+  deaths      Int      @default(0)
+  migrations  Int      @default(0)
+  
+  // Age groups
+  age0to4     Int      @default(0)
+  age5to9     Int      @default(0)
+  age10to14   Int      @default(0)
+  age15to19   Int      @default(0)
+  age20to24   Int      @default(0)
+  age25to29   Int      @default(0)
+  age30to34   Int      @default(0)
+  age35to39   Int      @default(0)
+  age40to44   Int      @default(0)
+  age45to49   Int      @default(0)
+  age50to54   Int      @default(0)
+  age55to59   Int      @default(0)
+  age60to64   Int      @default(0)
+  age65Plus   Int      @default(0)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([year, month])
+  @@index([year])
+  @@map("population_statistics")
+}
+
+// Village Events/Activities
+model VillageEvent {
+  id          String      @id @default(cuid())
+  title       String      @db.VarChar(255)
+  description String?     @db.Text
+  startDate   DateTime
+  endDate     DateTime?
+  location    String      @db.VarChar(255)
+  organizer   String      @db.VarChar(255)
+  budget      Decimal?    @db.Decimal(15, 2)
+  status      EventStatus @default(PLANNED)
+  isPublic    Boolean     @default(true)
+  
+  // Media
+  imageUrl    String?     @db.VarChar(255)
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([startDate])
+  @@index([status])
+  @@index([isPublic])
+  @@map("village_events")
+}
+
+// Additional Enums
+enum RegulationType {
+  PERDES      // Peraturan Desa
+  PERKADES    // Peraturan Kepala Desa
+  KEPUTUSAN   // Keputusan Kepala Desa
+  
+  @@map("regulation_type")
+}
+
+enum RegulationStatus {
+  DRAFT
+  ENACTED
+  REVOKED
+  
+  @@map("regulation_status")
+}
+
+enum MeetingType {
+  BPD         // Badan Permusyawaratan Desa
+  MUSDES      // Musyawarah Desa
+  RAPAT_KERJA // Rapat Kerja
+  SOSIALISASI // Sosialisasi
+  LAINNYA     // Lainnya
+  
+  @@map("meeting_type")
+}
+
+enum MeetingStatus {
+  SCHEDULED
+  ONGOING
+  COMPLETED
+  CANCELLED
+  
+  @@map("meeting_status")
+}
+
+enum AssetCategory {
+  BUILDING    // Bangunan
+  VEHICLE     // Kendaraan
+  EQUIPMENT   // Peralatan
+  LAND        // Tanah
+  INFRASTRUCTURE // Infrastruktur
+  
+  @@map("asset_category")
+}
+
+enum AssetCondition {
+  EXCELLENT
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+  
+  @@map("asset_condition")
+}
+
+enum EventStatus {
+  PLANNED
+  ONGOING
+  COMPLETED
+  CANCELLED
+  
+  @@map("event_status")
+}
+
+// Land/Property Management
+model LandParcel {
+  id          String      @id @default(cuid())
+  parcelNumber String     @unique @db.VarChar(50)
+  ownerName   String      @db.VarChar(100)
+  ownerNik    String?     @db.VarChar(16)
+  area        Decimal     @db.Decimal(10, 2) // in square meters
+  landUse     LandUse
+  landClass   LandClass
+  taxValue    Decimal?    @db.Decimal(15, 2)
+  
+  // Location
+  address     String      @db.Text
+  rt          String      @db.VarChar(5)
+  rw          String      @db.VarChar(5)
+  latitude    Float?
+  longitude   Float?
+  
+  // Boundaries (coordinates)
+  boundaries  Json?       // GeoJSON polygon
+  
+  // Legal documents
+  certificateNumber String? @db.VarChar(100)
+  certificateType   CertificateType?
+  issuedDate       DateTime? @db.Date
+  
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([ownerNik])
+  @@index([landUse])
+  @@index([rt, rw])
+  @@map("land_parcels")
+}
+
+enum LandUse {
+  RESIDENTIAL     // Perumahan
+  AGRICULTURE     // Pertanian
+  COMMERCIAL      // Komersial
+  INDUSTRIAL      // Industri
+  PUBLIC_FACILITY // Fasilitas Umum
+  FOREST          // Hutan
+  WATER_BODY      // Perairan
+  OTHER           // Lainnya
+  
+  @@map("land_use")
+}
+
+enum LandClass {
+  CLASS_I
+  CLASS_II
+  CLASS_III
+  CLASS_IV
+  CLASS_V
+  
+  @@map("land_class")
+}
+
+enum CertificateType {
+  SHM         // Sertifikat Hak Milik
+  SHGB        // Sertifikat Hak Guna Bangunan
+  SHP         // Sertifikat Hak Pakai
+  GIRIK       // Girik
+  PETOK_D     // Petok D
+  
+  @@map("certificate_type")
+}
+
+// Business/Enterprise Management
+model Business {
+  id          String        @id @default(cuid())
+  name        String        @db.VarChar(255)
+  ownerNik    String        @db.VarChar(16)
+  ownerName   String        @db.VarChar(100)
+  type        BusinessType
+  category    BusinessCategory
+  address     String        @db.Text
+  rt          String        @db.VarChar(5)
+  rw          String        @db.VarChar(5)
+  
+  // Business details
+  establishedDate DateTime?  @db.Date
+  employees      Int?        @default(0)
+  capital        Decimal?    @db.Decimal(15, 2)
+  revenue        Decimal?    @db.Decimal(15, 2)
+  
+  // Licensing
+  licenseNumber  String?     @db.VarChar(100)
+  licenseType    String?     @db.VarChar(100)
+  licenseExpiry  DateTime?   @db.Date
+  
+  // Status
+  isActive       Boolean     @default(true)
+  
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  @@index([ownerNik])
+  @@index([type])
+  @@index([category])
+  @@index([rt, rw])
+  @@map("businesses")
+}
+
+enum BusinessType {
+  MIKRO       // Usaha Mikro
+  KECIL       // Usaha Kecil
+  MENENGAH    // Usaha Menengah
+  BESAR       // Usaha Besar
+  
+  @@map("business_type")
+}
+
+enum BusinessCategory {
+  AGRICULTURE     // Pertanian
+  LIVESTOCK       // Peternakan
+  FISHERY         // Perikanan
+  MANUFACTURING   // Manufaktur
+  TRADE           // Perdagangan
+  SERVICES        // Jasa
+  FOOD_BEVERAGE   // Makanan & Minuman
+  HANDICRAFT      // Kerajinan
+  TRANSPORTATION  // Transportasi
+  OTHER           // Lainnya
+  
+  @@map("business_category")
+}
+
+// Health Data Management
+model HealthData {
+  id              String      @id @default(cuid())
+  citizenId       String      @unique
+  citizen         Citizen     @relation(fields: [citizenId], references: [id], onDelete: Cascade)
+  
+  // Basic health info
+  height          Int?        // in cm
+  weight          Decimal?    @db.Decimal(5, 2) // in kg
+  bloodPressure   String?     @db.VarChar(20)
+  
+  // Medical conditions
+  chronicDiseases String[]    // Array of chronic diseases
+  allergies       String[]    // Array of allergies
+  medications     String[]    // Array of current medications
+  
+  // Vaccination records
+  vaccinations    Json?       // Vaccination history
+  
+  // Insurance
+  insuranceType   InsuranceType?
+  insuranceNumber String?     @db.VarChar(50)
+  
+  // Emergency contact
+  emergencyContact String?    @db.VarChar(100)
+  emergencyPhone   String?    @db.VarChar(20)
+  
+  lastCheckup     DateTime?   @db.Date
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  @@map("health_data")
+}
+
+enum InsuranceType {
+  BPJS_KESEHATAN
+  BPJS_KETENAGAKERJAAN
+  ASURANSI_SWASTA
+  TIDAK_ADA
+  
+  @@map("insurance_type")
+}
+
+// Disaster Management
+model DisasterEvent {
+  id          String        @id @default(cuid())
+  name        String        @db.VarChar(255)
+  type        DisasterType
+  severity    DisasterSeverity @default(MEDIUM)
+  startDate   DateTime
+  endDate     DateTime?
+  location    String        @db.Text
+  description String        @db.Text
+  
+  // Impact assessment
+  affectedFamilies Int?     @default(0)
+  affectedPeople   Int?     @default(0)
+  casualties       Int?     @default(0)
+  damages          Decimal? @db.Decimal(15, 2)
+  
+  // Response
+  responseActions  String?  @db.Text
+  evacuationSites  String?  @db.Text
+  reliefDistributed Decimal? @db.Decimal(15, 2)
+  
+  // Status
+  status          DisasterStatus @default(ACTIVE)
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([type])
+  @@index([startDate])
+  @@index([status])
+  @@map("disaster_events")
+}
+
+enum DisasterType {
+  FLOOD           // Banjir
+  EARTHQUAKE      // Gempa Bumi
+  LANDSLIDE       // Tanah Longsor
+  FIRE            // Kebakaran
+  DROUGHT         // Kekeringan
+  STORM           // Badai
+  VOLCANIC        // Gunung Berapi
+  PANDEMIC        // Pandemi
+  OTHER           // Lainnya
+  
+  @@map("disaster_type")
+}
+
+enum DisasterSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+  
+  @@map("disaster_severity")
+}
+
+enum DisasterStatus {
+  ACTIVE
+  RECOVERY
+  RESOLVED
+  
+  @@map("disaster_status")
+}
+
