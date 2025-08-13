@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth/config'
-import { checkPermission } from '@/lib/rbac/server-utils'
+import { checkServerPermission } from '@/lib/rbac/server-utils'
 import { performanceMonitor, healthChecker } from '@/lib/monitoring/performance-monitor'
 import { cacheManager } from '@/lib/cache/redis'
 import { prisma } from '@/lib/db'
@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check permission
-    const hasPermission = await checkPermission(session.user.id, 'monitoring', 'read')
+    const hasPermission = await checkServerPermission('monitoring', 'read')
     if (!hasPermission) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check permission
-    const hasPermission = await checkPermission(session.user.id, 'monitoring', 'manage')
+    const hasPermission = await checkServerPermission('monitoring', 'manage')
     if (!hasPermission) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

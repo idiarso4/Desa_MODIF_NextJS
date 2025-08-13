@@ -8,7 +8,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth/config'
 import { prisma } from '@/lib/db'
 import { z } from 'zod'
-import { checkPermission } from '@/lib/rbac/server-utils'
+import { checkServerPermission } from '@/lib/rbac/server-utils'
 import { calculateDistance, isWithinBounds, calculateBounds } from '@/lib/maps/coordinates'
 
 // Validation schemas
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check permission
-    const hasPermission = await checkPermission(session.user.id, 'citizens', 'read')
+    const hasPermission = await checkServerPermission('citizens', 'read')
     if (!hasPermission) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -200,7 +200,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check permission
-    const hasPermission = await checkPermission(session.user.id, 'citizens', 'update')
+    const hasPermission = await checkServerPermission('citizens', 'update')
     if (!hasPermission) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -274,7 +274,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Check permission
-    const hasPermission = await checkPermission(session.user.id, 'citizens', 'update')
+    const hasPermission = await checkServerPermission('citizens', 'update')
     if (!hasPermission) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

@@ -1,7 +1,7 @@
-import { test, expect } from '@playwright/test'
+import { expect, Page, test } from '@playwright/test'
 
 test.describe('Finance Management', () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }: { page: Page }) => {
     // Login as admin user
     await page.goto('/login')
     await page.fill('[data-testid="username"]', 'admin')
@@ -11,7 +11,7 @@ test.describe('Finance Management', () => {
   })
 
   test.describe('Budget Management', () => {
-    test('should display budget list', async ({ page }) => {
+    test('should display budget list', async ({ page }: { page: Page }) => {
       await page.goto('/finance/budgets')
       
       await expect(page.locator('h1')).toContainText('Anggaran Desa')
@@ -21,7 +21,7 @@ test.describe('Finance Management', () => {
       await expect(page.locator('[data-testid="add-budget-button"]')).toBeVisible()
     })
 
-    test('should create new budget', async ({ page }) => {
+    test('should create new budget', async ({ page }: { page: Page }) => {
       await page.goto('/finance/budgets')
       
       // Click add budget button
@@ -41,7 +41,7 @@ test.describe('Finance Management', () => {
       await expect(page.locator('[data-testid="success-message"]')).toContainText('Anggaran berhasil ditambahkan')
     })
 
-    test('should validate budget form', async ({ page }) => {
+    test('should validate budget form', async ({ page }: { page: Page }) => {
       await page.goto('/finance/budgets')
       await page.click('[data-testid="add-budget-button"]')
       
@@ -53,7 +53,7 @@ test.describe('Finance Management', () => {
       await expect(page.locator('[data-testid="amount-error"]')).toContainText('Jumlah harus diisi')
     })
 
-    test('should edit existing budget', async ({ page }) => {
+    test('should edit existing budget', async ({ page }: { page: Page }) => {
       await page.goto('/finance/budgets')
       
       // Click edit button on first budget
@@ -71,14 +71,14 @@ test.describe('Finance Management', () => {
   })
 
   test.describe('Expense Management', () => {
-    test('should display expense list', async ({ page }) => {
+    test('should display expense list', async ({ page }: { page: Page }) => {
       await page.goto('/finance/expenses')
       
       await expect(page.locator('h1')).toContainText('Realisasi Anggaran')
       await expect(page.locator('[data-testid="expense-table"]')).toBeVisible()
     })
 
-    test('should create new expense', async ({ page }) => {
+    test('should create new expense', async ({ page }: { page: Page }) => {
       await page.goto('/finance/expenses')
       
       await page.click('[data-testid="add-expense-button"]')
@@ -97,7 +97,7 @@ test.describe('Finance Management', () => {
       await expect(page.locator('[data-testid="success-message"]')).toContainText('Pengeluaran berhasil dicatat')
     })
 
-    test('should require approval for large expenses', async ({ page }) => {
+    test('should require approval for large expenses', async ({ page }: { page: Page }) => {
       await page.goto('/finance/expenses')
       await page.click('[data-testid="add-expense-button"]')
       
@@ -115,14 +115,14 @@ test.describe('Finance Management', () => {
   })
 
   test.describe('Aid Programs', () => {
-    test('should display aid programs', async ({ page }) => {
+    test('should display aid programs', async ({ page }: { page: Page }) => {
       await page.goto('/finance/aid-programs')
       
       await expect(page.locator('h1')).toContainText('Program Bantuan')
       await expect(page.locator('[data-testid="aid-programs-table"]')).toBeVisible()
     })
 
-    test('should create new aid program', async ({ page }) => {
+    test('should create new aid program', async ({ page }: { page: Page }) => {
       await page.goto('/finance/aid-programs')
       
       await page.click('[data-testid="add-program-button"]')
@@ -138,7 +138,7 @@ test.describe('Finance Management', () => {
       await expect(page.locator('[data-testid="success-message"]')).toContainText('Program bantuan berhasil dibuat')
     })
 
-    test('should add beneficiaries to aid program', async ({ page }) => {
+    test('should add beneficiaries to aid program', async ({ page }: { page: Page }) => {
       await page.goto('/finance/aid-programs')
       
       // Click on first program
@@ -159,7 +159,7 @@ test.describe('Finance Management', () => {
   })
 
   test.describe('Financial Reports', () => {
-    test('should generate budget report', async ({ page }) => {
+    test('should generate budget report', async ({ page }: { page: Page }) => {
       await page.goto('/finance/reports')
       
       // Select report type
@@ -177,7 +177,7 @@ test.describe('Finance Management', () => {
       await expect(page.locator('[data-testid="budget-summary"]')).toBeVisible()
     })
 
-    test('should export report to PDF', async ({ page }) => {
+    test('should export report to PDF', async ({ page }: { page: Page }) => {
       await page.goto('/finance/reports')
       
       await page.selectOption('[data-testid="report-type"]', 'expense')
@@ -200,7 +200,7 @@ test.describe('Finance Management', () => {
   })
 
   test.describe('Financial Analytics', () => {
-    test('should display financial charts', async ({ page }) => {
+    test('should display financial charts', async ({ page }: { page: Page }) => {
       await page.goto('/finance/analytics')
       
       // Check if charts are visible
@@ -209,7 +209,7 @@ test.describe('Finance Management', () => {
       await expect(page.locator('[data-testid="monthly-spending-chart"]')).toBeVisible()
     })
 
-    test('should filter analytics by date range', async ({ page }) => {
+    test('should filter analytics by date range', async ({ page }: { page: Page }) => {
       await page.goto('/finance/analytics')
       
       // Change date range

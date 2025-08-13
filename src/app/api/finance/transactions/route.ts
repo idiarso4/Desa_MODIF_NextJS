@@ -3,12 +3,12 @@
  * Handles financial transactions and audit logging
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth/config'
 import { prisma } from '@/lib/db'
+import { checkServerPermission } from '@/lib/rbac/server-utils'
+import { getServerSession } from 'next-auth'
+import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { checkPermission } from '@/lib/rbac/server-utils'
 
 // Validation schemas
 const createTransactionSchema = z.object({
@@ -43,7 +43,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check permission
-    const hasPermission = await checkPermission(session.user.id, 'finance', 'read')
+    const hasPermission = await checkServerPermission('finance', 'read')
     if (!hasPermission) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -180,7 +180,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check permission
-    const hasPermission = await checkPermission(session.user.id, 'finance', 'create')
+    const hasPermission = await checkServerPermission('finance', 'create')
     if (!hasPermission) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

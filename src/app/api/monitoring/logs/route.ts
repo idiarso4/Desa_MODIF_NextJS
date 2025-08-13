@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth/config'
-import { checkPermission } from '@/lib/rbac/server-utils'
+import { checkServerPermission } from '@/lib/rbac/server-utils'
 import { logger, LogLevel, LogCategory } from '@/lib/monitoring/logger'
 import { z } from 'zod'
 
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Check permission
-    const hasPermission = await checkPermission(session.user.id, 'monitoring', 'read')
+    const hasPermission = await checkServerPermission('monitoring', 'read')
     if (!hasPermission) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -76,7 +76,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check permission
-    const hasPermission = await checkPermission(session.user.id, 'monitoring', 'export')
+    const hasPermission = await checkServerPermission('monitoring', 'export')
     if (!hasPermission) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -298,7 +298,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Check permission
-    const hasPermission = await checkPermission(session.user.id, 'monitoring', 'manage')
+    const hasPermission = await checkServerPermission('monitoring', 'manage')
     if (!hasPermission) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

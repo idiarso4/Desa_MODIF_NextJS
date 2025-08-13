@@ -3,12 +3,12 @@
  * Handles bulk operations for citizen data
  */
 
-import { NextRequest, NextResponse } from 'next/server'
-import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth/config'
 import { prisma } from '@/lib/db'
+import { checkServerPermission } from '@/lib/rbac/server-utils'
+import { getServerSession } from 'next-auth'
+import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
-import { checkPermission } from '@/lib/rbac/server-utils'
 
 // Validation schemas
 const bulkCreateSchema = z.object({
@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Check permission
-    const hasPermission = await checkPermission(session.user.id, 'citizens', 'create')
+    const hasPermission = await checkServerPermission('citizens', 'create')
     if (!hasPermission) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -180,7 +180,7 @@ export async function PUT(request: NextRequest) {
     }
 
     // Check permission
-    const hasPermission = await checkPermission(session.user.id, 'citizens', 'update')
+    const hasPermission = await checkServerPermission('citizens', 'update')
     if (!hasPermission) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -268,7 +268,7 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Check permission
-    const hasPermission = await checkPermission(session.user.id, 'citizens', 'delete')
+    const hasPermission = await checkServerPermission('citizens', 'delete')
     if (!hasPermission) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

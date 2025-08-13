@@ -1,110 +1,77 @@
+// Security audit API endpoints
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth/config'
-import { checkPermission } from '@/lib/rbac/server-utils'
-import { AuditQueryService, AuditEventType, AuditSeverity } from '@/lib/security/audit-system'
-import { logger } from '@/lib/monitoring/logger'
+import { checkServerPermission } from '@/lib/rbac/server-utils'
+import { auditSystem, AuditEventType, RiskLevel } from '@/lib/security/audit-system'
+import { z } from 'zod'
 
+// Validation schemas
+const auditQuerySchema = z.object({
+  eventType: z.nativeEnum(AuditEventType).optional(),
+  riskLevel: z.nativeEnum(RiskLevel).optional(),
+  userId: z.string().uuid().optional(),
+  ipAddress: z.string().ip().optional(),
+  resource: z.string().optional(),
+  startDate: z.string().datetime().optional(),
+  endDate: z.string().datetime().optional(),
+  page: z.coerce.number().min(1).default(1),
+  limit: z.coerce.number().min(1).max(100).default(50)
+})
+
+const createAuditEventSchema = z.object({
+  eventType: z.nativeEnum(AuditEventType),
+  riskLevel: z.nativeEnum(RiskLevel),
+  userId: z.string().uuid().optional(),
+  resource: z.string().optional(),
+  resourceId: z.string().optional(),
+  action: z.string().min(1).max(100),
+  outcome: z.enum(['SUCCESS', 'FAILURE', 'PARTIAL']),
+  details: z.record(z.any()).default({}),
+  metadata: z.record(z.any()).optional()
+})
+
+// GET /api/security/audit - Query audit logs
 export async function GET(request: NextRequest) {
-  const startTime = Date.now()
-  
   try {
-    // Check authentication
     const session = await getServerSession(authOptions)
     if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Check permissions - only admins can access audit logs
-    const hasPermission = await checkPermission(session.user.id, 'audit', 'read')
+    // Check permission
+    const hasPermission = await checkServerPermission('security', 'read')
     if (!hasPermission) {
-      await logger.warn('Unauthorized audit access attempt', {
-        userId: session.user.id,
-        username: session.user.username
-      })
-      
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    // Parse query parameters
     const { searchParams } = new URL(request.url)
+    const queryParams = Object.fromEntries(searchParams.entries())
     
-    const eventTypes = searchParams.get('eventTypes')?.split(',') as AuditEventType[] | undefined
-    const severity = searchParams.get('severity')?.split(',') as AuditSeverity[] | undefined
-    const userId = searchParams.get('userId') || undefined
-    const ipAddress = searchParams.get('ipAddress') || undefined
-    const resource = searchParams.get('resource') || undefined
-    const outcome = searchParams.get('outcome') as 'SUCCESS' | 'FAILURE' | 'PARTIAL' | undefined
-    const startDate = searchParams.get('startDate') ? new Date(searchParams.get('startDate')!) : undefined
-    const endDate = searchParams.get('endDate') ? new Date(searchParams.get('endDate')!) : undefined
-    const limit = parseInt(searchParams.get('limit') || '100')
-    const offset = parseInt(searchParams.get('offset') || '0')
+    const validatedParams = auditQuerySchema.parse(queryParams)
 
-    // Validate parameters
-    if (limit > 1000) {
-      return NextResponse.json(
-        { error: 'Limit cannot exceed 1000' },
-        { status: 400 }
-      )
-    }
-
-    // Search audit events
-    const result = await AuditQueryService.searchEvents({
-      eventTypes,
-      severity,
-      userId,
-      ipAddress,
-      resource,
-      outcome,
-      startDate,
-      endDate,
-      limit,
-      offset
-    })
-
-    const duration = Date.now() - startTime
-
-    await logger.info('Audit events retrieved', {
-      userId: session.user.id,
-      filters: {
-        eventTypes,
-        severity,
-        userId: userId,
-        ipAddress,
-        resource,
-        outcome,
-        startDate,
-        endDate
-      },
-      resultCount: result.events.length,
-      totalCount: result.total,
-      duration
-    })
+    // Get audit logs
+    const auditLogs = await queryAuditLogs(validatedParams)
+    const statistics = await auditSystem.getAuditStatistics(24)
 
     return NextResponse.json({
-      events: result.events,
-      pagination: {
-        limit,
-        offset,
-        total: result.total,
-        hasMore: offset + limit < result.total
-      },
-      timestamp: Date.now()
+      success: true,
+      data: {
+        logs: auditLogs.logs,
+        pagination: auditLogs.pagination,
+        statistics
+      }
     })
 
   } catch (error) {
-    const duration = Date.now() - startTime
+    console.error('Audit query error:', error)
     
-    await logger.error('Failed to retrieve audit events', error as Error, {
-      duration,
-      userId: session?.user?.id
-    })
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid query parameters', details: error.errors },
+        { status: 400 }
+      )
+    }
 
     return NextResponse.json(
       { error: 'Internal server error' },
@@ -113,82 +80,115 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// Get audit statistics
+// POST /api/security/audit - Create audit event (for testing or manual logging)
 export async function POST(request: NextRequest) {
-  const startTime = Date.now()
-  
   try {
     const session = await getServerSession(authOptions)
     if (!session?.user) {
-      return NextResponse.json(
-        { error: 'Unauthorized' },
-        { status: 401 }
-      )
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const hasPermission = await checkPermission(session.user.id, 'audit', 'read')
+    // Check permission
+    const hasPermission = await checkServerPermission('security', 'create')
     if (!hasPermission) {
-      return NextResponse.json(
-        { error: 'Insufficient permissions' },
-        { status: 403 }
-      )
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const body = await request.json()
-    const { timeRangeHours = 24, statsType = 'general' } = body
+    const validatedData = createAuditEventSchema.parse(body)
 
-    let result: any
+    // Get client IP
+    const ipAddress = getClientIP(request)
 
-    switch (statsType) {
-      case 'general':
-        result = await AuditQueryService.getStatistics(timeRangeHours)
-        break
-        
-      case 'user':
-        if (!body.userId) {
-          return NextResponse.json(
-            { error: 'User ID required for user statistics' },
-            { status: 400 }
-          )
-        }
-        result = {
-          userAuditTrail: await AuditQueryService.getUserAuditTrail(body.userId, body.limit || 100)
-        }
-        break
-        
-      default:
-        return NextResponse.json(
-          { error: 'Invalid statistics type' },
-          { status: 400 }
-        )
-    }
-
-    const duration = Date.now() - startTime
-
-    await logger.info('Audit statistics retrieved', {
-      userId: session.user.id,
-      statsType,
-      timeRangeHours,
-      duration
+    // Log audit event
+    await auditSystem.logEvent({
+      ...validatedData,
+      ipAddress,
+      userAgent: request.headers.get('user-agent') || undefined,
+      sessionId: request.cookies.get('session-id')?.value
     })
 
     return NextResponse.json({
-      statistics: result,
-      timeRangeHours,
-      timestamp: Date.now()
+      success: true,
+      message: 'Audit event logged successfully'
     })
 
   } catch (error) {
-    const duration = Date.now() - startTime
+    console.error('Audit creation error:', error)
     
-    await logger.error('Failed to retrieve audit statistics', error as Error, {
-      duration,
-      userId: session?.user?.id
-    })
+    if (error instanceof z.ZodError) {
+      return NextResponse.json(
+        { error: 'Invalid audit data', details: error.errors },
+        { status: 400 }
+      )
+    }
 
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
     )
   }
+}
+
+// Helper function to query audit logs
+async function queryAuditLogs(params: z.infer<typeof auditQuerySchema>) {
+  const { prisma } = await import('@/lib/db')
+  
+  // Build where clause
+  const where: any = {}
+  
+  if (params.eventType) where.eventType = params.eventType
+  if (params.riskLevel) where.riskLevel = params.riskLevel
+  if (params.userId) where.userId = params.userId
+  if (params.ipAddress) where.ipAddress = params.ipAddress
+  if (params.resource) where.resource = params.resource
+  
+  if (params.startDate || params.endDate) {
+    where.timestamp = {}
+    if (params.startDate) where.timestamp.gte = new Date(params.startDate)
+    if (params.endDate) where.timestamp.lte = new Date(params.endDate)
+  }
+
+  // Get total count
+  const total = await prisma.auditLog.count({ where })
+
+  // Get logs with pagination
+  const logs = await prisma.auditLog.findMany({
+    where,
+    include: {
+      user: {
+        select: {
+          id: true,
+          username: true,
+          name: true
+        }
+      }
+    },
+    orderBy: { timestamp: 'desc' },
+    skip: (params.page - 1) * params.limit,
+    take: params.limit
+  })
+
+  return {
+    logs,
+    pagination: {
+      page: params.page,
+      limit: params.limit,
+      total,
+      pages: Math.ceil(total / params.limit)
+    }
+  }
+}
+
+// Helper function to get client IP
+function getClientIP(request: NextRequest): string {
+  const forwarded = request.headers.get('x-forwarded-for')
+  const realIP = request.headers.get('x-real-ip')
+  const cfConnectingIP = request.headers.get('cf-connecting-ip')
+  
+  if (cfConnectingIP) return cfConnectingIP
+  if (realIP) return realIP
+  if (forwarded) return forwarded.split(',')[0].trim()
+  
+  return request.ip || 'unknown'
 }

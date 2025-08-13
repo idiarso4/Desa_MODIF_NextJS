@@ -1,7 +1,7 @@
 // Advanced logging system for OpenSID
-import { createLogger, format, transports, Logger } from 'winston'
-import DailyRotateFile from 'winston-daily-rotate-file'
 import path from 'path'
+import { createLogger, format, Logger, transports } from 'winston'
+import DailyRotateFile from 'winston-daily-rotate-file'
 
 // Log levels
 export enum LogLevel {
@@ -407,6 +407,3 @@ export class LogManager {
 
 // Export singleton logger instance
 export const logger = new OpenSIDLogger()
-
-// Export types and utilities
-export { LogLevel, LogCategory, createRequestLogger, createErrorLogger, LogManager }
