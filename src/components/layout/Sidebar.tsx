@@ -81,6 +81,12 @@ export function Sidebar({ className }: SidebarProps) {
         { title: 'Proses Surat', href: '/letters/process' },
         { title: 'Template Surat', href: '/letters/templates' }
       )
+    } else if (item.href === '/documents') {
+      subItems.push(
+        { title: 'Generator Dokumen', href: '/documents/generate' },
+        { title: 'Riwayat Dokumen', href: '/documents/history' },
+        { title: 'Template Dokumen', href: '/documents/templates' }
+      )
     } else if (item.href === '/finance') {
       subItems.push(
         { title: 'Anggaran', href: '/finance/budget' },

@@ -334,22 +334,33 @@ model Address {
 model Document {
   id         String      @id @default(cuid())
   name       String
-  type       DocumentType
-  url        String
-  size       Int
-  mimeType   String
-  
+  type       String      // Document type (domicileCertificate, businessCertificate, etc.)
+  url        String?     // File URL (optional for generated documents)
+  size       Int?        // File size (optional)
+  mimeType   String?     // MIME type (optional)
+
+  // Generated document fields
+  documentNumber String?  // Official document number
+  purpose        String?  // Purpose of the document
+  status         String   @default("DRAFT") // DRAFT, GENERATED, SIGNED, ARCHIVED
+  validUntil     DateTime? // Expiry date for the document
+
   // Relations
   citizenId  String?
   citizen    Citizen?    @relation(fields: [citizenId], references: [id])
-  
+
   letterRequestId String?
   letterRequest   LetterRequest? @relation(fields: [letterRequestId], references: [id])
-  
-  uploadedById String
-  uploadedBy   User        @relation("UploadedBy", fields: [uploadedById], references: [id])
-  uploadedAt   DateTime    @default(now())
 
+  uploadedById String?
+  uploadedBy   User?       @relation("UploadedBy", fields: [uploadedById], references: [id])
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([citizenId])
+  @@index([documentNumber])
   @@map("documents")
 }
 
@@ -442,16 +453,7 @@ enum SocialStatus {
   @@map("social_status")
 }
 
-enum DocumentType {
-  KTP
-  KK
-  AKTA_LAHIR
-  IJAZAH
-  SERTIFIKAT
-  LAINNYA
 
-  @@map("document_type")
-}
 
 enum LetterType {
   SURAT_KETERANGAN_DOMISILI

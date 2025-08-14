@@ -217,6 +217,12 @@ export function useUserMenu() {
       permission: { resource: 'letters', action: 'read' }
     },
     {
+      title: 'Dokumen',
+      href: '/documents',
+      icon: 'FileText',
+      permission: { resource: 'documents', action: 'read' }
+    },
+    {
       title: 'Keuangan',
       href: '/finance',
       icon: 'DollarSign',
