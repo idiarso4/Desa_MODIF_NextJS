@@ -1,6 +1,6 @@
 /**
  * Login Page
- * User authentication interface with enhanced security features
+ * Modern, accessible, and user-friendly authentication interface
  */
 
 'use client'
@@ -13,7 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Alert, AlertDescription } from '@/components/ui/alert'
-import { Loader2, Eye, EyeOff, Shield, AlertTriangle } from 'lucide-react'
+import { Loader2, Eye, EyeOff, Shield, AlertTriangle, Building2, Info } from 'lucide-react'
 import { useAuth } from '@/lib/auth/hooks'
 
 export default function LoginPage() {
@@ -138,16 +138,19 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 py-8 px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-lg space-y-6">
         {/* Header */}
         <div className="text-center">
-          <div className="mx-auto h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center mb-4">
-            <Shield className="h-8 w-8 text-white" />
+          <div className="mx-auto h-20 w-20 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-full flex items-center justify-center mb-6 shadow-lg">
+            <Shield className="h-10 w-10 text-white" />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900">OpenSID</h1>
-          <p className="mt-2 text-sm text-gray-600">
+          <h1 className="text-4xl font-bold text-gray-900 mb-2">OpenSID</h1>
+          <p className="text-base text-gray-600 font-medium">
             Sistem Informasi Desa
+          </p>
+          <p className="text-sm text-gray-500 mt-1">
+            Versi 2.0.0 - Next.js Edition
           </p>
         </div>
 

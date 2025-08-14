@@ -105,13 +105,58 @@ export default withAuth(
       }
     }
 
-    // Add security headers
+    // Add comprehensive security headers
     const response = NextResponse.next()
     
+    // Basic security headers
     response.headers.set('X-Frame-Options', 'DENY')
     response.headers.set('X-Content-Type-Options', 'nosniff')
+    response.headers.set('X-XSS-Protection', '1; mode=block')
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
-    response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()')
+    
+    // Permissions policy
+    response.headers.set('Permissions-Policy', [
+      'camera=()',
+      'microphone=()',
+      'geolocation=(self)',
+      'payment=()',
+      'usb=()',
+      'magnetometer=()',
+      'accelerometer=()',
+      'gyroscope=()'
+    ].join(', '))
+    
+    // HTTPS enforcement (only in production)
+    if (process.env.NODE_ENV === 'production') {
+      response.headers.set('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload')
+    }
+    
+    // Content Security Policy
+    const cspDirectives = [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net",
+      "style-src 'self' 'unsafe-inline' https://unpkg.com https://fonts.googleapis.com",
+      "img-src 'self' data: blob: https: https://*.tile.openstreetmap.org https://*.openstreetmap.org",
+      "font-src 'self' https://fonts.gstatic.com",
+      "connect-src 'self' https://api.openstreetmap.org https://nominatim.openstreetmap.org",
+      "frame-src 'none'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "frame-ancestors 'none'",
+      "upgrade-insecure-requests"
+    ]
+    
+    if (process.env.NODE_ENV === 'production') {
+      cspDirectives.push("report-uri /api/security/csp-report")
+    }
+    
+    response.headers.set('Content-Security-Policy', cspDirectives.join('; '))
+    
+    // Cross-origin policies
+    response.headers.set('Cross-Origin-Embedder-Policy', 'require-corp')
+    response.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
+    response.headers.set('Cross-Origin-Resource-Policy', 'same-origin')
 
     return response
   },
